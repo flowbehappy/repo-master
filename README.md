@@ -26,6 +26,8 @@ Create `.env` (or export env vars) based on `.env.example`.
 - Ensure permissions for history and group messages (typical):
   - `im:message.history:readonly`
   - `im:message.group_msg` (required to read group history)
+- For progress updates (patching the “working…” card in place):
+  - `im:message:update`
 - For image understanding (downloading message resources):
   - `im:resource`
 
@@ -99,6 +101,7 @@ If you want the bot to understand image messages, configure:
   - `image` (and images embedded in `post`): downloaded and sent to a vision-capable model for understanding.
 - History: first tries to answer from the latest message; if more context is needed → thread: all messages, otherwise: last 20 messages.
 - Reply: interactive card, falling back to text on errors.
+- Progress: sends a “Working on it…” card quickly and patch-updates it as work completes, then replaces it with the final answer.
 - Research: may query TiDB.ai and scan repo(s) multiple times; if critical details are missing it asks 1–3 targeted questions.
 - Repo awareness: if the message looks code-related and needs checking the repo (and `REPO_PATHS` / `[repo].paths` is set), the bot scans one or more repos (e.g. `tidb`, `tikv`, `pd`, `ticdc`, `tiflash`) and includes relevant excerpts in the prompt (single-repo `REPO_PATH` / `[repo].path` still works).
 - TiDB.ai: if the message is TiDB-related and not repo-code-specific, the bot queries TiDB.ai and includes its docs-backed context + URLs.

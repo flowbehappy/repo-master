@@ -68,6 +68,8 @@ When images are present, the pipeline additionally downloads image resources and
   - Normalizes incoming events, applies trigger rules, fetches history, formats transcript.
 - `src/lark/resources.ts`
   - Downloads message resources (images) via `im.v1.messageResource.get` for vision prompts.
+- `src/lark/progress.ts`
+  - Sends and patch-updates a “Working on it…” shared card so users can see progress for long requests.
 - `src/analysis/codeQuestion.ts`
   - Determines if a message is code-related and whether repo lookup is needed.
 - `src/analysis/researchFollowup.ts`
@@ -104,6 +106,7 @@ When images are present, the pipeline additionally downloads image resources and
 - Reply to the incoming `message_id` using the reply API (not “send to chat_id”).
 - `reply_in_thread` remains unset/false.
 - Send `msg_type="interactive"` with a card body; on failure, retry with `msg_type="text"`.
+- For slow requests, send a quick “Working on it…” card and patch-update it in place (`im.v1.message.patch`), then replace it with the final answer (card `config.update_multi=true`).
 
 ### Required permissions (expected)
 
@@ -112,6 +115,8 @@ When images are present, the pipeline additionally downloads image resources and
   - Group history requires `im:message.group_msg` (Feishu requirement).
 - Send/reply:
   - `im:message` or `im:message:send_as_bot` (depending on app configuration)
+- Progress card updates:
+  - `im:message:update`
 - Resource download (for image understanding):
   - `im:resource`
 

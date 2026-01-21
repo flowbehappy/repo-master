@@ -19,6 +19,7 @@ import { downloadMessageImageAsDataUrl, type LarkImageRef } from "../resources.j
 import { analyzeHistoryNeed } from "../../analysis/historyNeed.js";
 import { collectAnswerContext } from "../../research/collectAnswerContext.js";
 import { maybeBuildSelfIntroAnswer } from "../../answer/selfIntro.js";
+import { startProgressReporter } from "../progress.js";
 
 export async function handleImMessageReceiveV1(_deps: LarkDeps, data: unknown) {
   const incoming = normalizeIncomingMessage(data);
@@ -73,113 +74,149 @@ export async function handleImMessageReceiveV1(_deps: LarkDeps, data: unknown) {
 
   // Run the slow pipeline in the background so the WS event can be acked quickly.
   void (async () => {
+    let progress: Awaited<ReturnType<typeof startProgressReporter>> | undefined;
     try {
-    const selfIntro = maybeBuildSelfIntroAnswer(config, question);
-    if (selfIntro) {
+      const selfIntro = maybeBuildSelfIntroAnswer(config, question);
+      if (selfIntro) {
+        const card = buildAnswerCardContent({
+          title: "Repo Master",
+          answer: selfIntro,
+          sources: [],
+          mode: config.mode === "llm" && config.openaiApiKey ? "llm" : "fallback"
+        });
+
+        try {
+          await replyWithInteractiveCard({
+            client,
+            messageId: incoming.messageId,
+            cardContentJsonString: card,
+            dedupeKey: incoming.eventId
+          });
+        } catch (error) {
+          logger.warn({ error }, "Interactive card reply failed; falling back to text");
+          await replyWithText({
+            client,
+            messageId: incoming.messageId,
+            text: selfIntro,
+            dedupeKey: incoming.eventId
+          });
+        }
+        return;
+      }
+
+      const modeForCard = config.mode === "llm" && config.openaiApiKey ? "llm" : "fallback";
+      progress = await startProgressReporter({
+        client,
+        replyToMessageId: incoming.messageId,
+        dedupeKey: incoming.eventId,
+        title: "Repo Master",
+        mode: modeForCard
+      });
+
+      progress.setStage("Deciding whether chat history is needed");
+      const historyNeed = await analyzeHistoryNeed({ config, question, hasImages });
+
+      if (historyNeed.needsHistory) {
+        progress.setStage(incoming.threadId ? "Fetching thread history" : "Fetching recent chat history");
+      } else {
+        progress.setStage("Using latest message only");
+      }
+
+      const history = historyNeed.needsHistory
+        ? (incoming.threadId
+            ? await listAllThreadMessages(client, incoming.threadId)
+            : await listRecentChatMessages(
+                client,
+                incoming.chatId,
+                computeEndTimeSecFromCreateTimeMs(incoming.createTimeMs),
+                config.maxChatMessages
+              ))
+        : [];
+
+      logHistorySummary(incoming.threadId ? "thread" : "chat", history.length);
+
+      const transcript = buildTranscript(history);
+      const transcriptForPrompt = formatTranscriptForPrompt(transcript, config.maxPromptChars);
+
+      if (hasImages) progress.setStage("Downloading image(s)");
+      const imageRefs = collectImageRefs(
+        [{ messageId: incoming.messageId, imageKeys: incoming.imageKeys }, ...history],
+        Math.max(0, config.visionMaxImages)
+      );
+
+      const downloaded = imageRefs.length > 0
+        ? await Promise.all(
+            imageRefs.map((ref) =>
+              downloadMessageImageAsDataUrl({ client, ref, maxBytes: config.visionMaxImageBytes })
+            )
+          )
+        : [];
+      const images = downloaded
+        .filter((d): d is NonNullable<typeof d> => !!d)
+        .map((d) => ({ dataUrl: d.dataUrl, ...(config.visionImageDetail ? { detail: config.visionImageDetail } : {}) }));
+
+      progress.setStage("Researching (TiDB.ai + repo scan)");
+      const ctx = await collectAnswerContext({ config, question, transcript: transcriptForPrompt, images });
+
+      progress.setStage("Generating answer");
+      const answer = await generateAnswer({
+        config,
+        question,
+        transcript: transcriptForPrompt,
+        repoContext: ctx.repoContext,
+        externalContext: ctx.externalContext,
+        sources: ctx.sources,
+        images,
+        followUpQuestions: ctx.followUpQuestions
+      });
+
       const card = buildAnswerCardContent({
         title: "Repo Master",
-        answer: selfIntro,
-        sources: [],
-        mode: config.mode === "llm" && config.openaiApiKey ? "llm" : "fallback"
+        answer: answer.answer,
+        sources: answer.sources,
+        mode: answer.mode
       });
 
+      progress.setStage("Replying");
       try {
-        await replyWithInteractiveCard({
-          client,
-          messageId: incoming.messageId,
-          cardContentJsonString: card,
-          dedupeKey: incoming.eventId
-        });
+        if (progress.messageId) {
+          await progress.finalize(card);
+        } else {
+          await replyWithInteractiveCard({
+            client,
+            messageId: incoming.messageId,
+            cardContentJsonString: card,
+            dedupeKey: incoming.eventId
+          });
+          progress.stop();
+        }
       } catch (error) {
-        logger.warn({ error }, "Interactive card reply failed; falling back to text");
-        await replyWithText({
-          client,
-          messageId: incoming.messageId,
-          text: selfIntro,
-          dedupeKey: incoming.eventId
-        });
+        logger.warn({ error }, "Interactive card reply/update failed; falling back to text");
+        progress.stop();
+        await replyWithText({ client, messageId: incoming.messageId, text: answer.answer, dedupeKey: incoming.eventId });
       }
-      return;
-    }
-
-    const historyNeed = await analyzeHistoryNeed({ config, question, hasImages });
-
-    const history = historyNeed.needsHistory
-      ? (incoming.threadId
-          ? await listAllThreadMessages(client, incoming.threadId)
-          : await listRecentChatMessages(
-              client,
-              incoming.chatId,
-              computeEndTimeSecFromCreateTimeMs(incoming.createTimeMs),
-              config.maxChatMessages
-            ))
-      : [];
-
-    logHistorySummary(incoming.threadId ? "thread" : "chat", history.length);
-
-    const transcript = buildTranscript(history);
-    const transcriptForPrompt = formatTranscriptForPrompt(transcript, config.maxPromptChars);
-
-    const imageRefs = collectImageRefs(
-      [{ messageId: incoming.messageId, imageKeys: incoming.imageKeys }, ...history],
-      Math.max(0, config.visionMaxImages)
-    );
-
-    const downloaded = imageRefs.length > 0
-      ? await Promise.all(
-          imageRefs.map((ref) =>
-            downloadMessageImageAsDataUrl({ client, ref, maxBytes: config.visionMaxImageBytes })
-          )
-        )
-      : [];
-    const images = downloaded
-      .filter((d): d is NonNullable<typeof d> => !!d)
-      .map((d) => ({ dataUrl: d.dataUrl, ...(config.visionImageDetail ? { detail: config.visionImageDetail } : {}) }));
-
-    const ctx = await collectAnswerContext({ config, question, transcript: transcriptForPrompt, images });
-
-    const answer = await generateAnswer({
-      config,
-      question,
-      transcript: transcriptForPrompt,
-      repoContext: ctx.repoContext,
-      externalContext: ctx.externalContext,
-      sources: ctx.sources,
-      images,
-      followUpQuestions: ctx.followUpQuestions
-    });
-
-    const card = buildAnswerCardContent({
-      title: "Repo Master",
-      answer: answer.answer,
-      sources: answer.sources,
-      mode: answer.mode
-    });
-
-    try {
-      await replyWithInteractiveCard({
-        client,
-        messageId: incoming.messageId,
-        cardContentJsonString: card,
-        dedupeKey: incoming.eventId
-      });
     } catch (error) {
-      logger.warn({ error }, "Interactive card reply failed; falling back to text");
+      logger.error({ error }, "Failed to process message");
+
+      if (progress?.messageId) {
+        try {
+          progress.setStage("Failed");
+          await progress.fail("Sorry — I failed to process that request (check bot logs for details).");
+          return;
+        } catch {
+          // Fall back to a plain text reply.
+        } finally {
+          progress.stop();
+        }
+      }
+
+      progress?.stop();
       await replyWithText({
         client,
         messageId: incoming.messageId,
-        text: answer.answer,
+        text: "Sorry — I failed to process that request (check bot logs for details).",
         dedupeKey: incoming.eventId
       });
     }
-  } catch (error) {
-    logger.error({ error }, "Failed to process message");
-    await replyWithText({
-      client,
-      messageId: incoming.messageId,
-      text: "Sorry — I failed to process that request (check bot logs for details).",
-      dedupeKey: incoming.eventId
-    });
-  }
   })();
 }

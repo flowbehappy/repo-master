@@ -1,5 +1,3 @@
-import * as Lark from "@larksuiteoapi/node-sdk";
-
 export function buildAnswerCardContent(opts: {
   title: string;
   answer: string;
@@ -21,5 +19,24 @@ export function buildAnswerCardContent(opts: {
   const markdown = `${normalizedAnswer}${sourcesBlock}${modeLine}`.trim();
   const finalMarkdown = markdown.length > maxChars ? `${markdown.slice(0, maxChars - 20)}\n\n…(truncated)` : markdown;
 
-  return Lark.messageCard.defaultCard({ title: opts.title, content: finalMarkdown });
+  // Shared card so we can patch-update it in place (progress → final answer).
+  return JSON.stringify({
+    config: {
+      wide_screen_mode: true,
+      update_multi: true
+    },
+    elements: [
+      {
+        tag: "markdown",
+        content: finalMarkdown
+      }
+    ],
+    header: {
+      template: "blue",
+      title: {
+        content: opts.title,
+        tag: "plain_text"
+      }
+    }
+  });
 }
