@@ -85,7 +85,6 @@ export async function handleImMessageReceiveV1(_deps: LarkDeps, data: unknown) {
       const selfIntro = maybeBuildSelfIntroAnswer(config, question);
       if (selfIntro) {
         const card = buildAnswerCardContent({
-          title: "Repo Master",
           answer: selfIntro,
           sources: [],
           mode: config.mode === "llm" && config.openaiApiKey ? "llm" : "fallback"
@@ -115,7 +114,6 @@ export async function handleImMessageReceiveV1(_deps: LarkDeps, data: unknown) {
         client,
         replyToMessageId: incoming.messageId,
         dedupeKey: incoming.eventId,
-        title: "Repo Master",
         mode: modeForCard
       });
 
@@ -179,7 +177,6 @@ export async function handleImMessageReceiveV1(_deps: LarkDeps, data: unknown) {
       const finalAnswerText = prependWarnings(answer.answer, ctx.warnings);
 
       const card = buildAnswerCardContent({
-        title: "Repo Master",
         answer: finalAnswerText,
         sources: answer.sources,
         mode: answer.mode

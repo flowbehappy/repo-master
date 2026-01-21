@@ -30,7 +30,6 @@ export async function startProgressReporter(opts: {
   client: InstanceType<typeof Lark.Client>;
   replyToMessageId: string;
   dedupeKey: string;
-  title: string;
   mode: "llm" | "fallback";
 }): Promise<ProgressReporter> {
   const startedAtMs = Date.now();
@@ -58,7 +57,6 @@ export async function startProgressReporter(opts: {
       lastRendered = markdown;
 
       const card = buildAnswerCardContent({
-        title: opts.title,
         answer: markdown,
         sources: [],
         mode: opts.mode
@@ -76,7 +74,6 @@ export async function startProgressReporter(opts: {
   // Send an initial card reply so users see we started working.
   try {
     const initialCard = buildAnswerCardContent({
-      title: opts.title,
       answer: render(),
       sources: [],
       mode: opts.mode
@@ -123,7 +120,6 @@ export async function startProgressReporter(opts: {
     stop();
     if (!messageId || disabled) return;
     const card = buildAnswerCardContent({
-      title: opts.title,
       answer: errorText,
       sources: [],
       mode: opts.mode

@@ -1,5 +1,4 @@
 export function buildAnswerCardContent(opts: {
-  title: string;
   answer: string;
   sources: string[];
   mode: "llm" | "fallback";
@@ -30,13 +29,6 @@ export function buildAnswerCardContent(opts: {
         tag: "markdown",
         content: finalMarkdown
       }
-    ],
-    header: {
-      template: "blue",
-      title: {
-        content: opts.title,
-        tag: "plain_text"
-      }
-    }
+    ]
   });
 }
