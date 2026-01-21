@@ -8,6 +8,12 @@ export type TidbAiResult = {
   trace?: string;
 };
 
+export type TidbAiQueryErrorKind = "timeout" | "http" | "network" | "empty" | "unknown";
+
+export type TidbAiQueryOutcome =
+  | { ok: true; result: TidbAiResult }
+  | { ok: false; error: string; kind: TidbAiQueryErrorKind };
+
 type TidbAiSource = {
   source_uri?: string;
   name?: string;
@@ -78,6 +84,24 @@ function looksTidbRelated(text: string): boolean {
   return /\b(tidb|tikv|tiflash|pd|pingcap|tidb cloud|ticdc|br|dumpling|lightning|dm)\b/.test(lower);
 }
 
+function clipOneLine(text: string, maxChars: number): string {
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= maxChars) return oneLine;
+  return `${oneLine.slice(0, Math.max(0, maxChars - 1))}…`;
+}
+
+function classifyTidbAiError(error: unknown): { kind: TidbAiQueryErrorKind; message: string } {
+  const name = typeof (error as any)?.name === "string" ? String((error as any).name) : "";
+  if (name === "AbortError") return { kind: "timeout", message: "request timed out" };
+
+  const raw = error instanceof Error ? error.message : String(error);
+  const msg = raw.trim() ? raw.trim() : "unknown error";
+
+  if (/^tidb\.ai HTTP\s+\d+:/i.test(msg)) return { kind: "http", message: msg };
+
+  return { kind: "network", message: msg };
+}
+
 export function shouldQueryTidbAi(opts: {
   config: AppConfig;
   question: string;
@@ -113,7 +137,7 @@ export async function queryTidbAi(opts: {
   timeoutMs: number;
   maxContextChars: number;
   maxSources: number;
-}): Promise<TidbAiResult | undefined> {
+}): Promise<TidbAiQueryOutcome> {
   const url = new URL("/api/v1/chats", opts.baseUrl).toString();
 
   const sanitizedQuestion = sanitizeForTidbAi(opts.question, 2000);
@@ -159,7 +183,7 @@ export async function queryTidbAi(opts: {
 
     const data = (await resp.json()) as TidbAiChatResponse;
     const answer = (data.content ?? "").trim();
-    if (!answer) return undefined;
+    if (!answer) return { ok: false, kind: "empty", error: "tidb.ai returned no answer" };
 
     const sources = (data.sources ?? [])
       .map((s) => (s.source_uri ?? "").trim())
@@ -179,14 +203,22 @@ export async function queryTidbAi(opts: {
     ].join("\n");
 
     return {
-      answer: clippedAnswer,
-      contextText,
-      sources: dedupedSources,
-      trace: typeof data.trace === "string" ? data.trace : undefined
+      ok: true,
+      result: {
+        answer: clippedAnswer,
+        contextText,
+        sources: dedupedSources,
+        trace: typeof data.trace === "string" ? data.trace : undefined
+      }
     };
   } catch (error) {
+    const classified = classifyTidbAiError(error);
+    const errorText =
+      classified.kind === "timeout"
+        ? `tidb.ai request timed out after ${opts.timeoutMs}ms`
+        : `tidb.ai query failed: ${classified.message}`;
     logger.warn({ error }, "tidb.ai query failed");
-    return undefined;
+    return { ok: false, kind: classified.kind ?? "unknown", error: clipOneLine(errorText, 200) };
   } finally {
     clearTimeout(timeout);
   }

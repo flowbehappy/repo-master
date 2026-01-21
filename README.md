@@ -82,6 +82,7 @@ It does not do general web search/browsing; TiDB.ai is the only external knowled
 Notes:
 - The bot may send the user’s question (and sometimes a small amount of chat context) to TiDB.ai to retrieve relevant docs-backed information.
 - The final answer is produced by the bot model, which rewrites and sanity-checks TiDB.ai results and cross-checks against repo context when available.
+- If TiDB.ai is unavailable (timeout/network/etc.), Repo-Master still answers without TiDB.ai context and shows a short warning in the reply.
 
 ### Vision config (optional)
 
@@ -104,4 +105,6 @@ If you want the bot to understand image messages, configure:
 - Progress: sends a “Working on it…” card quickly and patch-updates it as work completes, then replaces it with the final answer.
 - Research: may query TiDB.ai and scan repo(s) multiple times; if critical details are missing it asks 1–3 targeted questions.
 - Repo awareness: if the message looks code-related and needs checking the repo (and `REPO_PATHS` / `[repo].paths` is set), the bot scans one or more repos (e.g. `tidb`, `tikv`, `pd`, `ticdc`, `tiflash`) and includes relevant excerpts in the prompt (single-repo `REPO_PATH` / `[repo].path` still works).
+- Concurrency: repo scanning runs in a worker-thread pool (config: `REPO_SEARCH_WORKERS` / `[repo].search_workers`) with a bounded queue (`REPO_SEARCH_QUEUE_MAX` / `[repo].search_queue_max`).
 - TiDB.ai: if the message is TiDB-related and not repo-code-specific, the bot queries TiDB.ai and includes its docs-backed context + URLs.
+- TiDB.ai failures: if TiDB.ai queries fail, the bot proceeds without TiDB.ai and surfaces the failure as a note in the answer.

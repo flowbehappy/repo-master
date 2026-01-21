@@ -9,6 +9,7 @@ export type CollectedAnswerContext = {
   externalContext?: string;
   sources: string[];
   followUpQuestions: string[];
+  warnings: string[];
 };
 
 type RepoBlock = { query: string; contextText: string; sources: string[] };
@@ -63,6 +64,8 @@ export async function collectAnswerContext(opts: {
   const seenRepoQueries = new Set<string>();
   const seenTidbQueries = new Set<string>();
 
+  const tidbFailures: string[] = [];
+
   const addRepo = (query: string, contextText: string, sources: string[]) => {
     const body = (contextText ?? "").trim();
     if (!body) return;
@@ -83,7 +86,7 @@ export async function collectAnswerContext(opts: {
   });
 
   const canRepo = opts.config.repoPaths.length > 0;
-  const canTidb = shouldQueryTidbAi({ config: opts.config, question: opts.question, transcript: opts.transcript });
+  let canTidb = shouldQueryTidbAi({ config: opts.config, question: opts.question, transcript: opts.transcript });
 
   const initialRepoQuery = analysis.needsRepoLookup && canRepo ? normalizeQuery(analysis.searchQuery) : undefined;
   const initialTidbQuery = canTidb ? normalizeQuery(opts.question) : undefined;
@@ -93,14 +96,16 @@ export async function collectAnswerContext(opts: {
 
   const initialRepoPromise = initialRepoQuery
     ? searchRepos({
-        repoPaths: opts.config.repoPaths,
-        query: initialRepoQuery,
-        maxFiles: opts.config.repoMaxFiles,
-        maxFileBytes: opts.config.repoMaxFileBytes,
-        maxSnippets: opts.config.repoMaxSnippets,
-        snippetContextLines: opts.config.repoSnippetContextLines,
-        maxContextChars: opts.config.repoMaxContextChars
-      })
+      repoPaths: opts.config.repoPaths,
+      query: initialRepoQuery,
+      maxFiles: opts.config.repoMaxFiles,
+      maxFileBytes: opts.config.repoMaxFileBytes,
+      maxSnippets: opts.config.repoMaxSnippets,
+      snippetContextLines: opts.config.repoSnippetContextLines,
+      maxContextChars: opts.config.repoMaxContextChars,
+      workers: opts.config.repoSearchWorkers,
+      queueMax: opts.config.repoSearchQueueMax
+    })
     : Promise.resolve(undefined);
 
   const initialTidbPromise = initialTidbQuery
@@ -118,7 +123,12 @@ export async function collectAnswerContext(opts: {
   const [initialRepo, initialTidb] = await Promise.all([initialRepoPromise, initialTidbPromise]);
 
   if (initialRepo && initialRepo.contextText.trim()) addRepo(initialRepoQuery ?? opts.question, initialRepo.contextText, initialRepo.sources);
-  if (initialTidb && initialTidb.contextText.trim()) addTidb(initialTidbQuery ?? opts.question, initialTidb.contextText, initialTidb.sources);
+  if (initialTidb && initialTidb.ok && initialTidb.result.contextText.trim()) {
+    addTidb(initialTidbQuery ?? opts.question, initialTidb.result.contextText, initialTidb.result.sources);
+  } else if (initialTidb && !initialTidb.ok) {
+    tidbFailures.push(initialTidb.error);
+    if (initialTidb.kind !== "empty") canTidb = false;
+  }
 
   for (let round = 2; round <= maxResearchRounds; round += 1) {
     if (opts.config.mode !== "llm" || !opts.config.openaiApiKey) break;
@@ -175,7 +185,9 @@ export async function collectAnswerContext(opts: {
         maxFileBytes: opts.config.repoMaxFileBytes,
         maxSnippets: opts.config.repoMaxSnippets,
         snippetContextLines: opts.config.repoSnippetContextLines,
-        maxContextChars: opts.config.repoMaxContextChars
+        maxContextChars: opts.config.repoMaxContextChars,
+        workers: opts.config.repoSearchWorkers,
+        queueMax: opts.config.repoSearchQueueMax
       });
       return { q, res };
     });
@@ -198,7 +210,12 @@ export async function collectAnswerContext(opts: {
       if (item.res.contextText.trim()) addRepo(item.q, item.res.contextText, item.res.sources);
     }
     for (const item of tidbResults) {
-      if (item.res?.contextText?.trim()) addTidb(item.q, item.res.contextText, item.res.sources ?? []);
+      if (item.res?.ok && item.res.result.contextText.trim()) {
+        addTidb(item.q, item.res.result.contextText, item.res.result.sources ?? []);
+      } else if (item.res && !item.res.ok) {
+        tidbFailures.push(item.res.error);
+        if (item.res.kind !== "empty") canTidb = false;
+      }
     }
 
     if (plan.done) break;
@@ -206,16 +223,18 @@ export async function collectAnswerContext(opts: {
 
   const repoContext = joinBlocks(repoBlocks, opts.config.repoMaxContextChars);
 
-  const externalContext =
-    joinBlocks(tidbBlocks, opts.config.tidbAiMaxContextChars) ??
-    (canTidb
-      ? "TiDB.ai lookup was requested but failed or returned no content. Do not guess TiDB product facts; ask the user for version details or retry later."
-      : undefined);
+  const externalContext = joinBlocks(tidbBlocks, opts.config.tidbAiMaxContextChars);
 
   const sources = mergeSources(
     [repoBlocks.flatMap((b) => b.sources), tidbBlocks.flatMap((b) => b.sources)],
     20
   );
 
-  return { repoContext, externalContext, sources, followUpQuestions };
+  const warnings: string[] = [];
+  if (initialTidbQuery && !externalContext) {
+    const msg = tidbFailures.find((x) => x.trim()) ?? "tidb.ai returned no usable content";
+    warnings.push(`TiDB.ai is unavailable for this question (${msg}). Answering without TiDB.ai context.`);
+  }
+
+  return { repoContext, externalContext, sources, followUpQuestions, warnings };
 }

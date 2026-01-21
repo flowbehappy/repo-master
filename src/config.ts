@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import process from "node:process";
 
 import dotenv from "dotenv";
@@ -24,6 +25,8 @@ export type AppConfig = {
   repoMaxSnippets: number;
   repoSnippetContextLines: number;
   repoMaxContextChars: number;
+  repoSearchWorkers: number;
+  repoSearchQueueMax: number;
 
   mode: RunMode;
   openaiApiKey?: string;
@@ -189,6 +192,15 @@ export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
   const repoMaxContextChars =
     getNumber(fileCfg, ["repo.max_context_chars"]) ?? readIntEnv("REPO_MAX_CONTEXT_CHARS", 80_000);
 
+  const defaultRepoSearchWorkers = (() => {
+    const cpuCount = os.cpus()?.length ?? 1;
+    return Math.max(1, Math.min(4, cpuCount - 1));
+  })();
+  const repoSearchWorkers =
+    getNumber(fileCfg, ["repo.search_workers", "repo.workers"]) ?? readIntEnv("REPO_SEARCH_WORKERS", defaultRepoSearchWorkers);
+  const repoSearchQueueMax =
+    getNumber(fileCfg, ["repo.search_queue_max", "repo.queue_max"]) ?? readIntEnv("REPO_SEARCH_QUEUE_MAX", 100);
+
   const openaiModelProvider = pickFirstNonEmpty(
     getString(fileCfg, ["openai.model_provider", "openai.provider"]),
     process.env.OPENAI_MODEL_PROVIDER?.trim(),
@@ -280,6 +292,8 @@ export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
     repoMaxSnippets,
     repoSnippetContextLines,
     repoMaxContextChars,
+    repoSearchWorkers,
+    repoSearchQueueMax,
 
     mode,
     openaiApiKey,

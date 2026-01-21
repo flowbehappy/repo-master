@@ -32,6 +32,7 @@ This repo implements the bot in Node.js/TypeScript using Feishu **long connectio
     - TiDB.ai is the only external knowledge source (no general web browsing/search).
     - Treat TiDB.ai output as evidence; verify against repo code when applicable and call out conflicts.
     - The bot may query TiDB.ai multiple times (and scan repo(s) multiple times) to collect enough evidence before answering.
+    - If TiDB.ai is unavailable (timeout/network/etc.), the bot still answers without it and shows the issue in the reply.
 - Reply format:
   - Default reply uses **interactive card**; fallback to **text** if card send fails.
   - Reply normally (`reply_in_thread=false`) — do not force “topic/thread style” follow-ups.
@@ -44,7 +45,7 @@ This repo implements the bot in Node.js/TypeScript using Feishu **long connectio
 - Full semantic code understanding (e.g., compiling/building the target repo).
 - Perfect/instant repo retrieval (current repo scan is heuristic and best-effort; no ripgrep/embeddings).
 - Embeddings/vector DB indexing (planned future improvement).
-- Streaming partial answers / updating cards in-place.
+- Streaming partial answer content (we only show progress updates; the final answer is sent once).
 
 ---
 
@@ -57,7 +58,7 @@ When images are present, the pipeline additionally downloads image resources and
 ### Key modules
 
 - `src/config.ts`
-  - Loads config from env / TOML (`--config`) (precedence: env → TOML).
+  - Loads config from env / TOML (`--config`) (precedence: env → TOML), including repo scan limits and worker pool settings (`repo.search_workers`, `repo.search_queue_max`).
 - `src/cli.ts`
   - Parses CLI args (e.g. `--config ./myrepo.toml`).
 - `src/lark/start.ts`
@@ -78,6 +79,8 @@ When images are present, the pipeline additionally downloads image resources and
   - Orchestrates iterative repo searches and TiDB.ai queries; aggregates context + sources for answer generation.
 - `src/repo/search.ts`
   - Scans local repo files (no `rg`) and extracts relevant excerpts + `path:line` sources.
+- `src/repo/workerPool.ts` and `src/repo/repoSearchWorker.ts`
+  - Runs repo scanning in worker threads with a bounded in-process queue so concurrent chats don’t block the main event loop.
 - `src/tidbAi.ts`
   - Calls `https://tidb.ai/api/v1/chats` (non-streaming) to get docs-backed TiDB answers + source URLs.
 - `src/answer/generateAnswer.ts`

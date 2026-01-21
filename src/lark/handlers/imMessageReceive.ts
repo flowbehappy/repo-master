@@ -21,6 +21,12 @@ import { collectAnswerContext } from "../../research/collectAnswerContext.js";
 import { maybeBuildSelfIntroAnswer } from "../../answer/selfIntro.js";
 import { startProgressReporter } from "../progress.js";
 
+function prependWarnings(answer: string, warnings: string[]): string {
+  const cleaned = (warnings ?? []).map((w) => w.trim()).filter(Boolean);
+  if (cleaned.length === 0) return answer;
+  return [`Notes:`, ...cleaned.map((w) => `- ${w}`), "", answer.trim()].join("\n").trim();
+}
+
 export async function handleImMessageReceiveV1(_deps: LarkDeps, data: unknown) {
   const incoming = normalizeIncomingMessage(data);
   if (!incoming) {
@@ -170,9 +176,11 @@ export async function handleImMessageReceiveV1(_deps: LarkDeps, data: unknown) {
         followUpQuestions: ctx.followUpQuestions
       });
 
+      const finalAnswerText = prependWarnings(answer.answer, ctx.warnings);
+
       const card = buildAnswerCardContent({
         title: "Repo Master",
-        answer: answer.answer,
+        answer: finalAnswerText,
         sources: answer.sources,
         mode: answer.mode
       });
@@ -193,7 +201,7 @@ export async function handleImMessageReceiveV1(_deps: LarkDeps, data: unknown) {
       } catch (error) {
         logger.warn({ error }, "Interactive card reply/update failed; falling back to text");
         progress.stop();
-        await replyWithText({ client, messageId: incoming.messageId, text: answer.answer, dedupeKey: incoming.eventId });
+        await replyWithText({ client, messageId: incoming.messageId, text: finalAnswerText, dedupeKey: incoming.eventId });
       }
     } catch (error) {
       logger.error({ error }, "Failed to process message");

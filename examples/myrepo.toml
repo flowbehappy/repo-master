@@ -17,6 +17,8 @@ paths = [
   "/Users/flow/workspace/github/tiflash",
   "/Users/flow/workspace/github/pd",
 ]
+search_workers = 4
+search_queue_max = 100
 
 [run]
 # llm | fallback

@@ -108,14 +108,12 @@ function tokenizeQuery(query: string): string[] {
 }
 
 function shouldSkipPath(relPath: string): boolean {
-  const p = relPath.toLowerCase();
-  if (p.startsWith(".git/")) return true;
-  if (p.includes("/.git/")) return true;
-  if (p.includes("/node_modules/")) return true;
-  if (p.includes("/vendor/")) return true;
-  if (p.includes("/target/")) return true;
-  if (p.includes("/dist/")) return true;
-  if (p.includes("/build/")) return true;
+  const p = relPath.toLowerCase().replace(/\\/g, "/");
+  for (const dir of [".git", "node_modules", "vendor", "target", "dist", "build"]) {
+    if (p === dir) return true;
+    if (p.startsWith(`${dir}/`)) return true;
+    if (p.includes(`/${dir}/`)) return true;
+  }
   if (p.endsWith(".png") || p.endsWith(".jpg") || p.endsWith(".jpeg") || p.endsWith(".gif") || p.endsWith(".pdf")) return true;
   return false;
 }
