@@ -68,7 +68,7 @@ export async function startProgressReporter(opts: {
         await patchInteractiveCard({ client: opts.client, messageId, cardContentJsonString: card });
       } catch (error) {
         disabled = true;
-        logger.warn({ error, messageId }, "Failed to patch progress card; disabling progress updates");
+        logger.warn({ err: error, messageId }, "Failed to patch progress card; disabling progress updates");
       }
     });
   };
@@ -88,7 +88,7 @@ export async function startProgressReporter(opts: {
       dedupeKey: `${opts.dedupeKey}_progress`
     });
   } catch (error) {
-    logger.warn({ error }, "Failed to send initial progress card; continuing without progress updates");
+    logger.warn({ err: error }, "Failed to send initial progress card; continuing without progress updates");
   }
 
   // Heartbeat update so long-running stages still show movement (elapsed time).

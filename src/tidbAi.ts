@@ -217,7 +217,7 @@ export async function queryTidbAi(opts: {
       classified.kind === "timeout"
         ? `tidb.ai request timed out after ${opts.timeoutMs}ms`
         : `tidb.ai query failed: ${classified.message}`;
-    logger.warn({ error }, "tidb.ai query failed");
+    logger.warn({ err: error, kind: classified.kind, detail: classified.message }, "tidb.ai query failed");
     return { ok: false, kind: classified.kind ?? "unknown", error: clipOneLine(errorText, 200) };
   } finally {
     clearTimeout(timeout);

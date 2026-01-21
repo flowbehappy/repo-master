@@ -77,8 +77,7 @@ export async function downloadMessageImageAsDataUrl(opts: {
       dataUrl
     };
   } catch (error) {
-    logger.warn({ error, messageId: opts.ref.messageId }, "Failed to download image resource");
+    logger.warn({ err: error, messageId: opts.ref.messageId }, "Failed to download image resource");
     return undefined;
   }
 }
-

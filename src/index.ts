@@ -17,7 +17,7 @@ function main() {
   });
 
   process.on("uncaughtException", (error) => {
-    logger.error({ error }, "Uncaught exception");
+    logger.error({ err: error }, "Uncaught exception");
     process.exitCode = 1;
   });
 

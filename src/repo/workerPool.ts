@@ -137,7 +137,7 @@ class RepoSearchWorkerPool {
     const slot = this.workers[index];
     if (!slot) return;
 
-    logger.warn({ error }, "Repo search worker failed; respawning");
+    logger.warn({ err: error }, "Repo search worker failed; respawning");
 
     const taskId = slot.taskId;
     slot.busy = false;

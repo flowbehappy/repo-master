@@ -40,7 +40,7 @@ export async function searchRepos(opts: MultiRepoSearchOptionsWithWorkers): Prom
       queueMax: opts.queueMax
     });
   } catch (error) {
-    logger.warn({ error }, "Repo search worker pool failed; falling back to in-process scan");
+    logger.warn({ err: error }, "Repo search worker pool failed; falling back to in-process scan");
     return searchReposLocal(localOpts);
   }
 }

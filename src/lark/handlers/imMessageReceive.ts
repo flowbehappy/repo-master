@@ -99,7 +99,7 @@ export async function handleImMessageReceiveV1(_deps: LarkDeps, data: unknown) {
             dedupeKey: incoming.eventId
           });
         } catch (error) {
-          logger.warn({ error }, "Interactive card reply failed; falling back to text");
+          logger.warn({ err: error }, "Interactive card reply failed; falling back to text");
           await replyWithText({
             client,
             messageId: incoming.messageId,
@@ -199,12 +199,12 @@ export async function handleImMessageReceiveV1(_deps: LarkDeps, data: unknown) {
           progress.stop();
         }
       } catch (error) {
-        logger.warn({ error }, "Interactive card reply/update failed; falling back to text");
+        logger.warn({ err: error }, "Interactive card reply/update failed; falling back to text");
         progress.stop();
         await replyWithText({ client, messageId: incoming.messageId, text: finalAnswerText, dedupeKey: incoming.eventId });
       }
     } catch (error) {
-      logger.error({ error }, "Failed to process message");
+      logger.error({ err: error }, "Failed to process message");
 
       if (progress?.messageId) {
         try {
