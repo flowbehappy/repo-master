@@ -1,0 +1,51 @@
+# Example per-instance config file for running multiple bots on one machine.
+
+[feishu]
+# Prefer using env vars or a local `.fsapp` file for secrets.
+# app_id = "cli_xxx"
+# app_secret = "yyy"
+base_domain = "https://open.feishu.cn"
+
+[bot]
+name = "deephack"
+
+[repo]
+paths = []
+
+[run]
+# llm | fallback
+mode = "llm"
+
+[openai]
+model_provider = "crs"
+model = "gpt-5.2"
+model_reasoning_effort = "xhigh"
+
+[openai.model_providers.crs]
+name = "crs"
+base_url = "https://right.codes/codex/v1"
+
+# TiDB.ai (optional external knowledge source)
+[tidb_ai]
+enabled = true
+base_url = "https://tidb.ai"
+timeout_ms = 120000
+max_context_chars = 24000
+max_sources = 12
+chat_engine = "default"
+
+# Vision (optional)
+[vision]
+max_images = 8
+max_image_bytes = 10485760
+image_detail = "high"
+
+# Prefer using the environment variable instead of committing secrets:
+# OPENAI_API_KEY = "sk-..."
+
+[limits]
+max_chat_messages = 20
+max_prompt_chars = 80000
+
+[logging]
+level = "info"
