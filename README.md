@@ -12,11 +12,9 @@ npm install
 
 2) Configure env
 
-- Option A (local dev): keep `.fsapp` in this repo (already `.gitignore`d) with:
-  - `App ID: ...`
-  - `App Secret: ...`
-- Option B: set env vars (recommended for deployment)
-  - `APP_ID`/`APP_SECRET` take precedence over TOML and `.fsapp`.
+- Option A: set env vars (recommended for deployment)
+  - `APP_ID`/`APP_SECRET` take precedence over TOML.
+- Option B: set `app_id`/`app_secret` in a per-instance TOML config file (do not commit secrets).
 
 Create `.env` (or export env vars) based on `.env.example`.
 
@@ -102,5 +100,5 @@ If you want the bot to understand image messages, configure:
 - History: first tries to answer from the latest message; if more context is needed → thread: all messages, otherwise: last 20 messages.
 - Reply: interactive card, falling back to text on errors.
 - Research: may query TiDB.ai and scan repo(s) multiple times; if critical details are missing it asks 1–3 targeted questions.
-- Repo awareness: if the message looks code-related and needs checking the repo (and `REPO_PATHS` / `[repo].paths` is set), the bot scans one or more repos and includes relevant excerpts in the prompt (single-repo `REPO_PATH` / `[repo].path` still works).
+- Repo awareness: if the message looks code-related and needs checking the repo (and `REPO_PATHS` / `[repo].paths` is set), the bot scans one or more repos (e.g. `tidb`, `tikv`, `pd`, `ticdc`, `tiflash`) and includes relevant excerpts in the prompt (single-repo `REPO_PATH` / `[repo].path` still works).
 - TiDB.ai: if the message is TiDB-related and not repo-code-specific, the bot queries TiDB.ai and includes its docs-backed context + URLs.

@@ -1,7 +1,7 @@
-.fsapp
 node_modules/
 dist/
 .env
+.fsapp
 .DS_Store
 *.log
 repo-master

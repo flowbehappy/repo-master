@@ -28,7 +28,8 @@ function heuristicIsCodeRelated(question: string): boolean {
 function heuristicNeedsRepoLookup(question: string): boolean {
   const q = question.toLowerCase();
   if (/\b(where|which file|what file|location|implemented|implementation|how does .* work)\b/.test(q)) return true;
-  if (/\b(in this repo|in ticdc|in the codebase|source code)\b/.test(q)) return true;
+  if (/\b(in this repo|in the repo|in the codebase|source code)\b/.test(q)) return true;
+  if (/\b(in\s+(?:ticdc|tidb|tikv|tiflash|pd)\b|(?:ticdc|tidb|tikv|tiflash|pd)\s+repo\b)/.test(q)) return true;
   if (/\b(error|panic|stack trace|fails|failing)\b/.test(q)) return true;
   return false;
 }

@@ -1,7 +1,7 @@
 # Example per-instance config file for running multiple bots on one machine.
 
 [feishu]
-# Prefer using env vars or a local `.fsapp` file for secrets.
+# Prefer using env vars for secrets.
 # app_id = "cli_xxx"
 # app_secret = "yyy"
 base_domain = "https://open.feishu.cn"
@@ -10,7 +10,13 @@ base_domain = "https://open.feishu.cn"
 name = "deephack"
 
 [repo]
-paths = []
+paths = [
+  "/Users/flow/workspace/github/ticdc",
+  "/Users/flow/workspace/github/tidb",
+  "/Users/flow/workspace/github/tikv",
+  "/Users/flow/workspace/github/tiflash",
+  "/Users/flow/workspace/github/pd",
+]
 
 [run]
 # llm | fallback

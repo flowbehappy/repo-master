@@ -57,7 +57,7 @@ When images are present, the pipeline additionally downloads image resources and
 ### Key modules
 
 - `src/config.ts`
-  - Loads config from env / TOML (`--config`) and (optionally) `.fsapp` for local dev (precedence: env → TOML → `.fsapp`).
+  - Loads config from env / TOML (`--config`) (precedence: env → TOML).
 - `src/cli.ts`
   - Parses CLI args (e.g. `--config ./myrepo.toml`).
 - `src/lark/start.ts`
@@ -171,7 +171,7 @@ Normalization:
 ## Project plan (implementation steps)
 
 1. Scaffold Node/TS project structure and scripts.
-2. Implement config loader (env + `.fsapp` parsing).
+2. Implement config loader (env + TOML parsing).
 3. Implement Feishu WS receiver and message gating.
 4. Implement history fetch for `thread` and `chat` containers.
 5. Implement OpenAI answering + fallback.

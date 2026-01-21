@@ -31,7 +31,7 @@ export function maybeBuildSelfIntroAnswer(config: AppConfig, question: string): 
     "I'm Repo Master.",
     "",
     "What I can do:",
-    "- Answer TiDB/TiKV/TiCDC/TiFlash/TiDB Cloud questions using TiDB.ai (docs-backed links).",
+    "- Answer TiDB/TiKV/PD/TiCDC/TiFlash/TiDB Cloud questions using TiDB.ai (docs-backed links).",
     "- Search configured code repos and cite relevant code as `path:line`.",
     "- Understand text/post/image messages (vision) when enabled.",
     "- Ask 1–3 clarifying questions when needed.",
@@ -39,4 +39,3 @@ export function maybeBuildSelfIntroAnswer(config: AppConfig, question: string): 
     `In group chats, mention me with @${mention}.`
   ].join("\n");
 }
-

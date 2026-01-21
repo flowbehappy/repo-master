@@ -48,31 +48,12 @@ export type AppConfig = {
   maxPromptChars: number;
 };
 
-type FsappCredentials = { appId: string; appSecret: string };
-
 function readTextFileIfExists(filePath: string): string | undefined {
   try {
     return fs.readFileSync(filePath, "utf8");
   } catch {
     return undefined;
   }
-}
-
-function parseFsappCredentials(fsappText: string): FsappCredentials | undefined {
-  const lines = fsappText
-    .split(/\r?\n/g)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  const appIdLine = lines.find((line) => /^App ID:\s*/i.test(line));
-  const appSecretLine = lines.find((line) => /^App Secret:\s*/i.test(line));
-  if (!appIdLine || !appSecretLine) return undefined;
-
-  const appId = appIdLine.replace(/^App ID:\s*/i, "").trim();
-  const appSecret = appSecretLine.replace(/^App Secret:\s*/i, "").trim();
-  if (!appId || !appSecret) return undefined;
-
-  return { appId, appSecret };
 }
 
 function normalizeBaseDomain(domain: string): string {
@@ -113,24 +94,6 @@ function readTomlConfig(configPath: string | undefined): TomlFlatConfig {
   return parseTomlToFlatConfig(text);
 }
 
-function resolveFsappSearchPaths(configPath: string | undefined): string[] {
-  const cwd = process.cwd();
-  const out = new Set<string>();
-  out.add(path.join(cwd, ".fsapp"));
-  if (configPath) out.add(path.join(path.dirname(configPath), ".fsapp"));
-  return Array.from(out);
-}
-
-function readFsappFromSearchPaths(pathsToTry: string[]): FsappCredentials | undefined {
-  for (const p of pathsToTry) {
-    const text = readTextFileIfExists(p);
-    if (!text) continue;
-    const creds = parseFsappCredentials(text);
-    if (creds) return creds;
-  }
-  return undefined;
-}
-
 function pickFirstNonEmpty(...values: Array<string | undefined>): string | undefined {
   for (const v of values) {
     const trimmed = v?.trim();
@@ -167,22 +130,16 @@ export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
   const fileCfg = readTomlConfig(options.configPath);
   const configDir = options.configPath ? path.dirname(options.configPath) : process.cwd();
 
-  const fsappCredentials = readFsappFromSearchPaths(resolveFsappSearchPaths(options.configPath));
-
   const appId = pickFirstNonEmpty(
     process.env.APP_ID?.trim(),
-    getString(fileCfg, ["app_id", "feishu.app_id", "feishu.APP_ID"]),
-    fsappCredentials?.appId
+    getString(fileCfg, ["app_id", "feishu.app_id", "feishu.APP_ID"])
   );
   const appSecret = pickFirstNonEmpty(
     process.env.APP_SECRET?.trim(),
-    getString(fileCfg, ["app_secret", "feishu.app_secret", "feishu.APP_SECRET"]),
-    fsappCredentials?.appSecret
+    getString(fileCfg, ["app_secret", "feishu.app_secret", "feishu.APP_SECRET"])
   );
   if (!appId || !appSecret) {
-    throw new Error(
-      "Missing APP_ID/APP_SECRET. Set env vars or provide a local .fsapp file with 'App ID:' and 'App Secret:' lines."
-    );
+    throw new Error("Missing APP_ID/APP_SECRET. Set env vars or provide them in the TOML config file.");
   }
 
   const baseDomain = normalizeBaseDomain(
