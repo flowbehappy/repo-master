@@ -52,7 +52,7 @@ export async function analyzeResearchFollowups(opts: {
 
   if (opts.config.mode !== "llm" || !opts.config.openaiApiKey) return fallback;
 
-  const hasRepo = opts.config.repoPaths.length > 0;
+  const hasRepo = opts.config.repos.length > 0;
   const hasTidbAi = opts.config.tidbAiEnabled;
 
   try {
@@ -79,6 +79,8 @@ export async function analyzeResearchFollowups(opts: {
       "- Only propose tidb_ai_queries if TiDB.ai is enabled.",
       "",
       `Repo lookup possible: ${hasRepo ? "yes" : "no"}`,
+      "Available repos:",
+      ...(hasRepo ? opts.config.repos.map((r) => `- ${r.displayName}`) : ["(none)"]),
       `TiDB.ai enabled: ${hasTidbAi ? "yes" : "no"}`,
       `Remaining research rounds after this: ${Math.max(0, opts.remainingRounds - 1)}`
     ].join("\n");
@@ -171,4 +173,3 @@ export async function analyzeResearchFollowups(opts: {
     return fallback;
   }
 }
-

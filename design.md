@@ -13,7 +13,10 @@ This repo implements the bot in Node.js/TypeScript using Feishu **long connectio
 ## Goals
 
 - Respond to users in Feishu with professional, actionable answers.
-- When configured with repo path(s), use local repo code/docs as context for code-related questions.
+- When configured with local repo(s), use repo code/docs as context for code-related questions.
+  - Supports named repos and optional branch variants (e.g. `repo.ticdc.master.path`, `repo.ticdc.v8.5.path`).
+  - Selects the most relevant repo(s) automatically based on the user’s message (e.g. “CDC” → `ticdc`).
+    - CDC mapping: `ticdc` contains CDC new architecture (v8.5+); `tiflow` contains CDC old architecture and DM.
 - Keep answers concise by default; ask a small number of clarifying questions when needed.
 - Use enough chat history to understand the user’s question:
   - First decide whether the **latest message (and attachments)** is self-contained.
@@ -58,7 +61,11 @@ When images are present, the pipeline additionally downloads image resources and
 ### Key modules
 
 - `src/config.ts`
-  - Loads config from env / TOML (`--config`) (precedence: env → TOML), including repo scan limits and worker pool settings (`repo.search_workers`, `repo.search_queue_max`).
+  - Loads config from env / TOML (`--config`) (precedence: env → TOML).
+  - Repo config supports:
+    - legacy: `repo.paths` / `repo.path` / `REPO_PATHS` / `REPO_PATH`
+    - named: `repo.<name>.path` and `repo.<name>.<variant...>.path`
+  - Includes repo scan limits and worker pool settings (`repo.search_workers`, `repo.search_queue_max`).
 - `src/cli.ts`
   - Parses CLI args (e.g. `--config ./myrepo.toml`).
 - `src/lark/start.ts`

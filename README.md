@@ -91,6 +91,37 @@ If you want the bot to understand image messages, configure:
 - TOML: `[vision] max_images`, `max_image_bytes`, `image_detail = "low"|"high"|"auto"`
 - Env: `VISION_MAX_IMAGES`, `VISION_MAX_IMAGE_BYTES`, `VISION_IMAGE_DETAIL`
 
+### Repo config (optional)
+
+You can configure local code repos so Repo-Master can answer repo-specific questions with `path:line` citations.
+
+**Recommended (named repos + optional branches):**
+
+```toml
+[repo.pd] # default: master
+path = "/data/nvme0n1/github/pd"
+
+[repo.ticdc.master]
+path = "/data/nvme0n1/github/ticdc_master"
+
+[repo.ticdc.v8.5]
+path = "/data/nvme0n1/github/ticdc_v8.5"
+
+[repo]
+search_workers = 4
+search_queue_max = 100
+```
+
+Repo-Master uses the repo names (e.g. `ticdc`, `pd`) and branch labels (e.g. `master`, `v8.5`) to pick the right repo(s) automatically (e.g. “CDC issue” → `ticdc`).
+
+Notes for TiDB ecosystem repos:
+- CDC: new architecture code starts from v8.5 in `ticdc`; older CDC (and DM) code lives in `tiflow`. Configure both if you need to answer questions across versions/architectures.
+
+**Legacy (still supported):**
+
+- TOML: `[repo] paths = ["/path/to/pd", "/path/to/ticdc"]` or `[repo] path = "/path/to/ticdc"`
+- Env: `REPO_PATHS=/path/to/pd,/path/to/ticdc` or `REPO_PATH=/path/to/ticdc`
+
 ## Behavior
 
 - `p2p`: replies to every user message.
@@ -104,7 +135,7 @@ If you want the bot to understand image messages, configure:
 - Reply: interactive card, falling back to text on errors.
 - Progress: sends a “Working on it…” card quickly and patch-updates it as work completes, then replaces it with the final answer.
 - Research: may query TiDB.ai and scan repo(s) multiple times; if critical details are missing it asks 1–3 targeted questions.
-- Repo awareness: if the message looks code-related and needs checking the repo (and `REPO_PATHS` / `[repo].paths` is set), the bot scans one or more repos (e.g. `tidb`, `tikv`, `pd`, `ticdc`, `tiflash`) and includes relevant excerpts in the prompt (single-repo `REPO_PATH` / `[repo].path` still works).
+- Repo awareness: if the message looks code-related and repos are configured, the bot selects the most relevant repo(s) (e.g. CDC → `ticdc`) and scans them; legacy `REPO_PATHS` / `[repo].paths` still works.
 - Concurrency: repo scanning runs in a worker-thread pool (config: `REPO_SEARCH_WORKERS` / `[repo].search_workers`) with a bounded queue (`REPO_SEARCH_QUEUE_MAX` / `[repo].search_queue_max`).
 - TiDB.ai: if the message is TiDB-related and not repo-code-specific, the bot queries TiDB.ai and includes its docs-backed context + URLs.
 - TiDB.ai failures: if TiDB.ai queries fail, the bot proceeds without TiDB.ai and surfaces the failure as a note in the answer.

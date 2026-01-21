@@ -14,10 +14,10 @@ export type MultiRepoSearchOptionsWithWorkers = MultiRepoSearchOptions & {
 export async function searchRepos(opts: MultiRepoSearchOptionsWithWorkers): Promise<MultiRepoSearchResult> {
   const workers = Math.max(0, Math.floor(opts.workers ?? 0));
   const query = opts.query.trim();
-  if (!query || opts.repoPaths.length === 0) return { query, contextText: "", sources: [] };
+  if (!query || opts.repos.length === 0) return { query, contextText: "", sources: [] };
 
   const localOpts: MultiRepoSearchOptions = {
-    repoPaths: opts.repoPaths,
+    repos: opts.repos,
     query,
     maxFiles: opts.maxFiles,
     maxFileBytes: opts.maxFileBytes,
@@ -30,7 +30,7 @@ export async function searchRepos(opts: MultiRepoSearchOptionsWithWorkers): Prom
 
   try {
     return await runRepoSearchInPool(workers, {
-      repoPaths: opts.repoPaths,
+      repos: opts.repos,
       query,
       maxFiles: opts.maxFiles,
       maxFileBytes: opts.maxFileBytes,

@@ -57,6 +57,8 @@ function buildUserPrompt(opts: {
   repoContext?: string;
   externalContext?: string;
   followUpQuestions?: string[];
+  availableRepos?: string[];
+  repoHints?: string[];
 }): string {
   const blocks = [
     "User question:",
@@ -65,6 +67,14 @@ function buildUserPrompt(opts: {
     "Chat context (may be partial):",
     opts.transcript.trim() || "(none)"
   ];
+
+  if (opts.availableRepos && opts.availableRepos.length > 0) {
+    blocks.push("", "Configured local repos (name@variant: path):", ...opts.availableRepos);
+  }
+
+  if (opts.repoHints && opts.repoHints.length > 0) {
+    blocks.push("", "Repo hints:", ...opts.repoHints);
+  }
 
   if (opts.repoContext?.trim()) {
     blocks.push("", "Repo context:", opts.repoContext.trim(), "", "When using repo context, cite sources as `path:line`.");
@@ -125,7 +135,12 @@ export async function generateAnswer(opts: {
     });
 
     const systemPrompt = buildSystemPrompt(opts.config.botName);
-    const userPrompt = buildUserPrompt(opts);
+    const availableRepos = opts.config.repos.map((r) => `- ${r.displayName}: ${r.path}`);
+    const repoNameSet = new Set(opts.config.repos.map((r) => r.name.trim().toLowerCase()).filter(Boolean));
+    const repoHints: string[] = [];
+    if (repoNameSet.has("ticdc")) repoHints.push("- CDC (new architecture, v8.5+): ticdc");
+    if (repoNameSet.has("tiflow")) repoHints.push("- CDC (old architecture) + DM: tiflow");
+    const userPrompt = buildUserPrompt({ ...opts, availableRepos, repoHints });
     const reasoningEffort = resolveReasoningEffort(opts.config);
 
     try {

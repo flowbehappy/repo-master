@@ -13,13 +13,21 @@ export type ModelReasoningEffort = "low" | "medium" | "high" | "xlow" | "xhigh";
 
 export type VisionImageDetail = "low" | "high" | "auto";
 
+export type RepoTarget = {
+  id: string;
+  name: string;
+  variant: string;
+  path: string;
+  displayName: string;
+};
+
 export type AppConfig = {
   appId: string;
   appSecret: string;
   baseDomain: string;
   botName: string;
 
-  repoPaths: string[];
+  repos: RepoTarget[];
   repoMaxFiles: number;
   repoMaxFileBytes: number;
   repoMaxSnippets: number;
@@ -127,6 +135,58 @@ function normalizeVisionImageDetail(raw: string | undefined): VisionImageDetail 
   return undefined;
 }
 
+function repoDisplayName(name: string, variant: string): string {
+  const n = name.trim();
+  const v = variant.trim();
+  return v ? `${n}@${v}` : n;
+}
+
+function parseRepoTargetsFromToml(fileCfg: TomlFlatConfig, configDir: string): RepoTarget[] {
+  const out: RepoTarget[] = [];
+  const prefix = "repo.";
+
+  for (const [fullKey, value] of Object.entries(fileCfg)) {
+    if (!fullKey.startsWith(prefix)) continue;
+    if (!fullKey.endsWith(".path")) continue;
+
+    // Supported formats:
+    // - [repo.<name>] path = "/abs/path"
+    // - [repo.<name>.<variant...>] path = "/abs/path" (variant may contain dots like v8.5)
+    const parts = fullKey.split(".");
+    if (parts.length < 3) continue; // skip legacy "repo.path"
+    if (parts[0] !== "repo") continue;
+
+    const name = (parts[1] ?? "").trim();
+    if (!name) continue;
+
+    const variantRaw = parts.slice(2, -1).join(".").trim();
+    const variant = variantRaw ? variantRaw : "master";
+
+    const rawPath = typeof value === "string" ? value.trim() : "";
+    if (!rawPath) continue;
+
+    const resolvedPath = path.isAbsolute(rawPath) ? rawPath : path.resolve(configDir, rawPath);
+    const id = `${name}:${variant}`;
+    out.push({ id, name, variant, path: resolvedPath, displayName: repoDisplayName(name, variant) });
+  }
+
+  return out;
+}
+
+function repoTargetsFromPaths(paths: string[], configDir: string): RepoTarget[] {
+  const out: RepoTarget[] = [];
+  for (const p of paths) {
+    const trimmed = (p ?? "").trim();
+    if (!trimmed) continue;
+    const resolvedPath = path.isAbsolute(trimmed) ? trimmed : path.resolve(configDir, trimmed);
+    const name = path.basename(resolvedPath) || resolvedPath;
+    const variant = "master";
+    const id = `${name}:${variant}`;
+    out.push({ id, name, variant, path: resolvedPath, displayName: repoDisplayName(name, variant) });
+  }
+  return out;
+}
+
 export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
   dotenv.config();
 
@@ -158,6 +218,8 @@ export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
     "deephack"
   )!;
 
+  const namedReposFromFile = parseRepoTargetsFromToml(fileCfg, configDir);
+
   const repoPathsFromFile = getStringArray(fileCfg, ["repo.paths"]);
   const repoPathFromFile = getString(fileCfg, ["repo.path", "repo_path"]);
   const repoPathFromEnv = process.env.REPO_PATH?.trim();
@@ -173,13 +235,15 @@ export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
   const rawPaths = repoPathsFromFile ?? (repoPathFromFile ? [repoPathFromFile] : []);
   const pickedPaths =
     rawPaths.length > 0 ? rawPaths : envPaths.length > 0 ? envPaths : repoPathFromEnv ? [repoPathFromEnv] : [];
+  const legacyRepos = repoTargetsFromPaths(pickedPaths, configDir);
 
-  const resolvedPaths = pickedPaths
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map((p) => (path.isAbsolute(p) ? p : path.resolve(configDir, p)));
-
-  const repoPaths = Array.from(new Set(resolvedPaths));
+  const reposByPath = new Map<string, RepoTarget>();
+  for (const repo of [...namedReposFromFile, ...legacyRepos]) {
+    const abs = path.resolve(repo.path);
+    if (reposByPath.has(abs)) continue;
+    reposByPath.set(abs, { ...repo, path: abs });
+  }
+  const repos = Array.from(reposByPath.values());
 
   const repoMaxFiles =
     getNumber(fileCfg, ["repo.max_files"]) ?? readIntEnv("REPO_MAX_FILES", 8000);
@@ -286,7 +350,7 @@ export function loadConfig(options: LoadConfigOptions = {}): AppConfig {
     baseDomain,
     botName,
 
-    repoPaths,
+    repos,
     repoMaxFiles,
     repoMaxFileBytes,
     repoMaxSnippets,

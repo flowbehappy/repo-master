@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import type { RepoTarget } from "../config.js";
 import { searchRepo, type RepoSnippet } from "./search.js";
 
 export type MultiRepoSearchResult = {
@@ -9,7 +10,7 @@ export type MultiRepoSearchResult = {
 };
 
 export type MultiRepoSearchOptions = {
-  repoPaths: string[];
+  repos: RepoTarget[];
   query: string;
   maxFiles: number;
   maxFileBytes: number;
@@ -20,18 +21,22 @@ export type MultiRepoSearchOptions = {
 
 type RepoWithName = {
   repoPath: string;
-  repoName: string;
+  repoLabel: string;
 };
 
-function uniqueRepoPaths(repoPaths: string[]): RepoWithName[] {
+function normalizeRepos(repos: RepoTarget[]): RepoWithName[] {
   const out: RepoWithName[] = [];
   const seen = new Set<string>();
-  for (const p of repoPaths) {
-    const abs = path.resolve(p.trim());
+
+  for (const repo of repos) {
+    const abs = path.resolve((repo.path ?? "").trim());
     if (!abs) continue;
     if (seen.has(abs)) continue;
     seen.add(abs);
-    out.push({ repoPath: abs, repoName: path.basename(abs) || abs });
+
+    const fallbackName = path.basename(abs) || abs;
+    const label = (repo.displayName ?? repo.name ?? "").trim() || fallbackName;
+    out.push({ repoPath: abs, repoLabel: label });
   }
   return out;
 }
@@ -42,7 +47,7 @@ function snippetSource(repoPath: string, snippet: RepoSnippet): string {
 
 export async function searchReposLocal(opts: MultiRepoSearchOptions): Promise<MultiRepoSearchResult> {
   const query = opts.query.trim();
-  const repos = uniqueRepoPaths(opts.repoPaths);
+  const repos = normalizeRepos(opts.repos);
   if (!query || repos.length === 0) return { query, contextText: "", sources: [] };
 
   const perRepoMaxSnippets = Math.max(opts.maxSnippets, 1);
@@ -82,11 +87,10 @@ export async function searchReposLocal(opts: MultiRepoSearchOptions): Promise<Mu
   let contextText = "";
   for (const { repo, snippet } of selected) {
     const src = snippetSource(repo.repoPath, snippet);
-    const block = `Repo: ${repo.repoName}\nFile: ${src}\n${snippet.excerpt}\n`;
+    const block = `Repo: ${repo.repoLabel}\nFile: ${src}\n${snippet.excerpt}\n`;
     if (contextText.length + block.length > opts.maxContextChars) break;
     contextText += `${contextText ? "\n" : ""}${block}`;
   }
 
   return { query, contextText: contextText.trim(), sources };
 }
-

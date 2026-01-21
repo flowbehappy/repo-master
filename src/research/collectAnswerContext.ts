@@ -1,5 +1,6 @@
 import type { AppConfig } from "../config.js";
 import { analyzeCodeQuestion, type PromptImage } from "../analysis/codeQuestion.js";
+import { selectReposForSearch } from "../analysis/repoSelect.js";
 import { analyzeResearchFollowups } from "../analysis/researchFollowup.js";
 import { searchRepos } from "../repo/multiSearch.js";
 import { queryTidbAi, shouldQueryTidbAi } from "../tidbAi.js";
@@ -85,7 +86,7 @@ export async function collectAnswerContext(opts: {
     images: opts.images
   });
 
-  const canRepo = opts.config.repoPaths.length > 0;
+  const canRepo = opts.config.repos.length > 0;
   let canTidb = shouldQueryTidbAi({ config: opts.config, question: opts.question, transcript: opts.transcript });
 
   const initialRepoQuery = analysis.needsRepoLookup && canRepo ? normalizeQuery(analysis.searchQuery) : undefined;
@@ -94,9 +95,13 @@ export async function collectAnswerContext(opts: {
   if (initialRepoQuery) seenRepoQueries.add(initialRepoQuery);
   if (initialTidbQuery) seenTidbQueries.add(initialTidbQuery);
 
+  const reposForInitialQuery = canRepo
+    ? selectReposForSearch({ config: opts.config, question: opts.question, transcript: opts.transcript })
+    : [];
+
   const initialRepoPromise = initialRepoQuery
     ? searchRepos({
-      repoPaths: opts.config.repoPaths,
+      repos: reposForInitialQuery,
       query: initialRepoQuery,
       maxFiles: opts.config.repoMaxFiles,
       maxFileBytes: opts.config.repoMaxFileBytes,
@@ -178,8 +183,11 @@ export async function collectAnswerContext(opts: {
     for (const q of nextTidbQueries) seenTidbQueries.add(q);
 
     const repoPromises = nextRepoQueries.map(async (q) => {
+      const reposForQuery = canRepo
+        ? selectReposForSearch({ config: opts.config, question: `${opts.question}\n${q}`, transcript: opts.transcript })
+        : [];
       const res = await searchRepos({
-        repoPaths: opts.config.repoPaths,
+        repos: reposForQuery,
         query: q,
         maxFiles: opts.config.repoMaxFiles,
         maxFileBytes: opts.config.repoMaxFileBytes,

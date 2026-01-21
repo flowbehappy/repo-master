@@ -16,7 +16,7 @@ export type PromptImage = {
 function heuristicIsCodeRelated(question: string): boolean {
   const q = question.toLowerCase();
   if (/\b(panic|stack trace|segfault|nil pointer|null pointer)\b/.test(q)) return true;
-  if (/\b(error|exception|bug|crash|fails|failing|build)\b/.test(q)) return true;
+  if (/\b(error|exception|bug|issue|problem|crash|fails|failing|build|regression|fix)\b/.test(q)) return true;
   if (/\b(function|method|class|struct|interface|package|module)\b/.test(q)) return true;
   if (/\b(golang|go|rust|java|node|typescript|python)\b/.test(q)) return true;
   if (/\b(go\.mod|package\.json|makefile)\b/.test(q)) return true;
@@ -30,6 +30,11 @@ function heuristicNeedsRepoLookup(question: string): boolean {
   if (/\b(where|which file|what file|location|implemented|implementation|how does .* work)\b/.test(q)) return true;
   if (/\b(in this repo|in the repo|in the codebase|source code)\b/.test(q)) return true;
   if (/\b(in\s+(?:ticdc|tidb|tikv|tiflash|pd)\b|(?:ticdc|tidb|tikv|tiflash|pd)\s+repo\b)/.test(q)) return true;
+
+  const mentionsComponent = /\b(ticdc|cdc|tidb|tikv|tiflash|pd)\b/.test(q);
+  const mentionsBug = /\b(error|panic|stack trace|fails|failing|bug|issue|problem|regression)\b/.test(q);
+  if (mentionsComponent && mentionsBug) return true;
+
   if (/\b(error|panic|stack trace|fails|failing)\b/.test(q)) return true;
   return false;
 }
@@ -48,11 +53,11 @@ export async function analyzeCodeQuestion(opts: {
   images?: PromptImage[];
 }): Promise<CodeQuestionAnalysis> {
   const question = opts.question.trim();
-  const hasRepo = opts.config.repoPaths.length > 0;
+  const hasRepo = opts.config.repos.length > 0;
 
   const fallback: CodeQuestionAnalysis = {
     isCodeRelated: heuristicIsCodeRelated(question),
-    needsRepoLookup: hasRepo && heuristicIsCodeRelated(question) && heuristicNeedsRepoLookup(question),
+    needsRepoLookup: hasRepo && heuristicNeedsRepoLookup(question),
     searchQuery: question
   };
 
@@ -77,7 +82,9 @@ export async function analyzeCodeQuestion(opts: {
       "- If it asks about how this specific project behaves/implements something, needs_repo_lookup=true.",
       "- If repo lookup is impossible (repo not configured), set needs_repo_lookup=false.",
       "",
-      `Repo configured: ${hasRepo ? "yes" : "no"}`
+      `Repo configured: ${hasRepo ? "yes" : "no"}`,
+      "Available repos:",
+      ...(hasRepo ? opts.config.repos.map((r) => `- ${r.displayName}`) : ["(none)"])
     ].join("\n");
 
     const user = [
@@ -154,7 +161,8 @@ export async function analyzeCodeQuestion(opts: {
     const isCodeRelated = typeof parsed.is_code_related === "boolean" ? parsed.is_code_related : fallback.isCodeRelated;
     const needsRepoLookupRaw =
       typeof parsed.needs_repo_lookup === "boolean" ? parsed.needs_repo_lookup : fallback.needsRepoLookup;
-    const needsRepoLookup = hasRepo ? needsRepoLookupRaw : false;
+    // Keep heuristics as a safety net so we don't miss obvious repo-related questions.
+    const needsRepoLookup = hasRepo ? (needsRepoLookupRaw || fallback.needsRepoLookup) : false;
     const searchQuery = (typeof parsed.search_query === "string" && parsed.search_query.trim()) ? parsed.search_query.trim() : question;
 
     return { isCodeRelated, needsRepoLookup, searchQuery };
